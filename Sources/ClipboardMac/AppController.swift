@@ -13,6 +13,7 @@ import HistoryInfrastructure
     private var paste: PasteService<SystemPasteTarget>!
     private var panel: HistoryPanel!
     private var settings: SettingsController!
+    private var about: AboutWindowController!
     private var statusItem: NSStatusItem!
     private var statusMenu: NSMenu!
     private var timer: Timer?
@@ -51,6 +52,7 @@ import HistoryInfrastructure
         panel.onDelete = { [weak self] entry in self?.mutate { [weak self] in try await self?.history.delete(entry.id) } }
         panel.onSettings = { [weak self] in self?.openSettings() }
         settings = SettingsController(preferences: preferences, clipboard: clipboard, storagePath: storagePath)
+        about = AboutWindowController()
         settings.reportError = { [weak self] in self?.showError($0) }
         settings.changeShortcut = { [weak self] value in
             guard let self, preferences.shortcut != value else { return }
@@ -97,6 +99,8 @@ import HistoryInfrastructure
         let appMenu = NSMenu(); appItem.submenu = appMenu
         appMenu.addItem(withTitle: "Open History", action: #selector(toggleHistory), keyEquivalent: "").target = self
         appMenu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "About ClipboardMac", action: #selector(openAbout), keyEquivalent: "").target = self
         appMenu.addItem(withTitle: "Quit ClipboardMac", action: #selector(quit), keyEquivalent: "q").target = self
         let editItem = NSMenuItem(); editItem.title = "Edit"; main.addItem(editItem)
         let edit = NSMenu(title: "Edit"); editItem.submenu = edit
@@ -188,6 +192,7 @@ import HistoryInfrastructure
     @objc private func togglePause() { setPaused(!preferences.paused) }
     private func setPaused(_ value: Bool) { preferences.paused = value; capture.paused = value; updateStatus(); settings.refresh() }
     @objc private func openSettings() { panel?.hide(); settings.open() }
+    @objc private func openAbout() { panel?.hide(); about.present() }
     @objc private func refreshSettings() { settings?.refresh() }
     @objc private func quit() { NSApp.terminate(nil) }
     @objc private func appActivated(_ notification: Notification) {
