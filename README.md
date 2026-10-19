@@ -1,72 +1,72 @@
 # ClipboardMac
 
-Нативная утилита истории буфера обмена для **macOS 26+**, написанная на Swift и AppKit. Работает в строке меню без постоянного значка Dock. История остаётся на этом Mac; приложение не отправляет содержимое буфера или телеметрию. Проверка версий и загрузка выбранного обновления используют публичные GitHub Releases.
+A native clipboard history utility for **macOS 26+**, built with Swift and AppKit. It runs in the menu bar without a persistent Dock icon. History stays on this Mac; the app sends no clipboard content or telemetry. Version checks and downloads of selected updates use public GitHub Releases.
 
-## Запуск
+## Getting started
 
-Собранное приложение: `dist/ClipboardMac.app`. Откройте его в Finder. Для постоянного использования можно переместить его в `/Applications`, затем настроить разрешения и Launch at Login.
+The built app is located at `dist/ClipboardMac.app`. Open it in Finder. For regular use, you can move it to `/Applications`, then configure permissions and Launch at Login.
 
-При первом запуске откроются Settings:
+Settings opens on first launch:
 
-1. В General выберите глобальное сочетание Open History. По умолчанию сочетание не назначено. История также открывается из строки меню.
-2. В Privacy запросите доступ к буферу, затем выберите **Always Allow** в системных настройках. При Ask/Denied приложение не читает содержимое автоматически и не создаёт повторных запросов.
-3. Для автоматической вставки разрешите Accessibility. Без этого доступны история, поиск и Copy Only.
+1. In General, choose a global Open History shortcut. No shortcut is assigned by default. You can also open history from the menu bar.
+2. In Privacy, request clipboard access, then choose **Always Allow** in System Settings. When access is set to Ask or Denied, the app does not read content automatically or prompt repeatedly.
+3. Enable Accessibility for automatic paste. History, search, and Copy Only remain available without it.
 
-Приложение не требует Input Monitoring, Screen Recording или прав администратора. Запуск при входе выключен по умолчанию; его переключатель отражает системное состояние SMAppService. Для автозапуска используйте приложение в постоянном месте, а не исполняемый файл из `.build`.
+The app does not require Input Monitoring, Screen Recording, or administrator privileges. Launch at Login is off by default; its toggle reflects the system's SMAppService state. For launch at login, use the app in a permanent location rather than the executable in `.build`.
 
-## Использование
+## Usage
 
-- Копируйте обычный текст. Захват проверяет изменения каждые 500 мс.
-- Откройте историю из строки меню или выбранным сочетанием. Поиск получает фокус; первая запись выделена.
-- Стрелки выбирают запись; Enter или один клик запрашивают вставку. Command-Enter выполняет Copy Only.
-- Command-P закрепляет/открепляет, Command-Backspace удаляет, Command-Y открывает полный текст только для чтения. Эти команды также доступны в контекстном меню.
-- Escape, повторное сочетание открытия или смена активного окна закрывают панель без вставки.
-- Clear Recent сохраняет закреплённые записи; Clear All требует подтверждения.
+- Copy plain text. Capture checks for changes every 500 ms.
+- Open history from the menu bar or with your chosen shortcut. Search receives focus, and the first entry is selected.
+- Use the arrow keys to select an entry; Enter or a single click requests Paste. Command-Enter performs Copy Only.
+- Command-P pins or unpins, Command-Backspace deletes, and Command-Y opens the full text in a read-only preview. These commands are also available in the context menu.
+- Escape, pressing the Open History shortcut again, or switching the active window closes the panel without pasting.
+- Clear Recent keeps pinned entries; Clear All requires confirmation.
 
-Точный текст, включая Unicode, пробелы, табуляцию и переносы строк, сохраняется без нормализации. Пустые значения, содержимое свыше 1 MiB UTF-8, файлы, нетекстовые и помеченные concealed/transient/generated значения не сохраняются. История содержит до 500 недавних уникальных записей по умолчанию; диапазон настройки — 50–2000. Закрепления находятся вне лимита.
+Exact text, including Unicode, spaces, tabs, and line breaks, is preserved without normalization. Empty values, content larger than 1 MiB in UTF-8, files, non-text content, and values marked concealed/transient/generated are not saved. History retains up to 500 recent unique entries by default; the configurable range is 50–2000. Pinned entries do not count toward the limit.
 
-Автовставка проверяет исходное приложение, окно и фокусируемый элемент. Если цель недоступна, фокус изменился или нет Accessibility, клавиши не отправляются; доступен Copy Only с сообщением «Copied. Press Cmd+V to paste». Отправка Command-V не считается подтверждением фактической вставки. Новая внешняя копия во время восстановления цели отменяет синтетическую вставку.
+Automatic paste checks the original app, window, and focused element. If the target is unavailable, focus has changed, or Accessibility is not enabled, no keystrokes are sent; Copy Only is available with the message “Copied. Press Cmd+V to paste”. Sending Command-V is not treated as confirmation that insertion actually occurred. A new external copy while restoring the target cancels the synthetic paste.
 
-## Сборка и проверки
+## Building and testing
 
-Нужны Xcode с SDK macOS 26 или новее и Swift 6.2+; сторонние пакеты не используются.
+Requires Xcode with the macOS 26 SDK or later and Swift 6.2+; no third-party packages are used.
 
 ```sh
 swift test
 Scripts/build-app.sh
 ```
 
-Universal-сборка для Apple Silicon и Intel:
+A universal build for Apple Silicon and Intel:
 
 ```sh
 UNIVERSAL=1 Scripts/build-app.sh
 ```
 
-Для debug-сборки: `CONFIGURATION=debug Scripts/build-app.sh`. Для открытия Settings при разработке: `dist/ClipboardMac.app/Contents/MacOS/ClipboardMac --settings`.
+For a debug build: `CONFIGURATION=debug Scripts/build-app.sh`. To open Settings during development: `dist/ClipboardMac.app/Contents/MacOS/ClipboardMac --settings`.
 
-Скрипт создаёт `.app` и подписывает его ad hoc. Для распространения за пределами собственной машины потребуются Developer ID, notarization и стабильная подпись; можно передать `SIGN_IDENTITY` скрипту. Минимальная версия macOS в обеих частях universal-бинарника — 26.0.
+The script creates an `.app` bundle and signs it ad hoc. Distribution beyond your own machine requires Developer ID, notarization, and a stable signing identity; you can pass `SIGN_IDENTITY` to the script. The minimum macOS version for both slices of the universal binary is 26.0.
 
-## Публикация и обновления
+## Publishing and updates
 
-Публикация выполняется из чистой рабочей копии на ветке `main`. Скрипт получает последние коммиты и теги, увеличивает patch в SemVer-теге `vMAJOR.MINOR.PATCH` (первая версия — `v1.0.0`) и отправляет ветку вместе с тегом в `origin`:
+Publish from a clean working tree on the `main` branch. The script fetches the latest commits and tags, increments the patch version in the `vMAJOR.MINOR.PATCH` SemVer tag (the first version is `v1.0.0`), and pushes the branch together with the tag to `origin`:
 
 ```sh
 ./publish-next-version.sh
 ```
 
-Можно указать remote, ветку, начальную версию и тип увеличения версии (`Patch`, `Minor` или `Major`), например `./publish-next-version.sh origin main 1.0.0 Minor`. Отправка тега запускает `.github/workflows/release.yml`: workflow собирает universal `.app` и прикладывает `ClipboardMac-macos.zip` к GitHub Release. Убедитесь, что изменения закоммичены до запуска скрипта.
+You can specify the remote, branch, initial version, and version increment type (`Patch`, `Minor`, or `Major`), for example: `./publish-next-version.sh origin main 1.0.0 Minor`. Pushing the tag triggers `.github/workflows/release.yml`: the workflow builds a universal `.app` and attaches `ClipboardMac-macos.zip` to the GitHub Release. Make sure your changes are committed before running the script.
 
-В меню **About ClipboardMac** приложение проверяет последний стабильный GitHub Release. Если доступна новая версия, там можно открыть страницу релиза или установить архив и перезапустить приложение. Автоматическая установка требует, чтобы родительский каталог приложения был доступен для записи; если каталог защищён, About покажет причину. Для распространения за пределами собственной машины настройте Developer ID и notarization.
+In **About ClipboardMac**, the app checks the latest stable GitHub Release. If a new version is available, you can open its release page or install the archive and restart the app. Automatic installation requires write access to the app's parent directory; if the directory is protected, About explains why installation is unavailable. For distribution beyond your own machine, configure Developer ID and notarization.
 
-## Устройство
+## Architecture
 
-- `HistoryCore`: модели, правила текста, сортировка, Unicode-поиск и контракт хранилища; без AppKit и SQLite.
-- `HistoryServices`: захват и оркестрация вставки через заменяемые контракты.
-- `HistoryInfrastructure`: системный SQLite, NSPasteboard, Accessibility, Carbon hotkeys, настройки и разрешение клавиши Command-V через текущую раскладку.
-- `ClipboardMac`: AppKit-панель, настройки и композиция приложения.
+- `HistoryCore`: models, text rules, sorting, Unicode search, and the storage contract; no AppKit or SQLite.
+- `HistoryServices`: capture and paste orchestration through replaceable contracts.
+- `HistoryInfrastructure`: system SQLite, NSPasteboard, Accessibility, Carbon hotkeys, preferences, and Command-V key resolution using the current keyboard layout.
+- `ClipboardMac`: the AppKit panel, settings, and application composition.
 
-SQLite находится в `~/Library/Application Support/ClipboardMac/history.sqlite`. Каталог имеет права `0700`, основной файл — `0600`; доступ к sidecar-файлам защищён каталогом. Схема версионируется, изменения выполняются транзакционно, запросы с данными параметризованы, включены WAL, synchronous FULL и secure_delete. Обслуживание выполняется вне главного потока после очистки и при старте. Приложение не заявляет собственного шифрования или гарантированного физического стирания данных с SSD/резервных копий.
+The SQLite database is located at `~/Library/Application Support/ClipboardMac/history.sqlite`. The directory has `0700` permissions, and the main file has `0600` permissions; the directory protects access to sidecar files. The schema is versioned, changes are transactional, queries containing data are parameterized, and WAL, synchronous FULL, and secure_delete are enabled. Maintenance runs off the main thread after clearing history and at startup. The app does not claim to provide its own encryption or guarantee physical erasure of data from SSDs or backups.
 
-## Состояние проверки
+## Verification status
 
-Автоматические проверки и оставшиеся ручные сценарии: [Documentation/Verification.md](Documentation/Verification.md). Текущие продуктовые требования и инженерные правила находятся в `.idd/`.
+Automated checks and remaining manual scenarios are documented in [Documentation/Verification.md](Documentation/Verification.md). Current product requirements and engineering rules are in `.idd/`.
