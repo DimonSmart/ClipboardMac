@@ -51,10 +51,10 @@ UNIVERSAL=1 Scripts/build-app.sh
 Публикация выполняется из чистой рабочей копии на ветке `main`. Скрипт получает последние коммиты и теги, увеличивает patch в SemVer-теге `vMAJOR.MINOR.PATCH` (первая версия — `v1.0.0`) и отправляет ветку вместе с тегом в `origin`:
 
 ```sh
-Scripts/publish-next-version.sh
+./publish-next-version.sh
 ```
 
-Можно указать remote, ветку, начальную версию и тип увеличения версии (`Patch`, `Minor` или `Major`), например `Scripts/publish-next-version.sh origin main 1.0.0 Minor`. Отправка тега запускает `.github/workflows/release.yml`: workflow собирает universal `.app` и прикладывает `ClipboardMac-macos.zip` к GitHub Release. Убедитесь, что изменения закоммичены до запуска скрипта.
+Можно указать remote, ветку, начальную версию и тип увеличения версии (`Patch`, `Minor` или `Major`), например `./publish-next-version.sh origin main 1.0.0 Minor`. Отправка тега запускает `.github/workflows/release.yml`: workflow собирает universal `.app` и прикладывает `ClipboardMac-macos.zip` к GitHub Release. Убедитесь, что изменения закоммичены до запуска скрипта.
 
 В меню **About ClipboardMac** приложение проверяет последний стабильный GitHub Release. Если доступна новая версия, там можно открыть страницу релиза или установить архив и перезапустить приложение. Автоматическая установка требует, чтобы родительский каталог приложения был доступен для записи; если каталог защищён, About покажет причину. Для распространения за пределами собственной машины настройте Developer ID и notarization.
 
