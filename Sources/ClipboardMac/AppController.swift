@@ -126,6 +126,7 @@ import HistoryInfrastructure
         menu.addItem(.separator())
         menu.addItem(withTitle: "Clear Recent History", action: #selector(clearRecent), keyEquivalent: "").target = self
         menu.addItem(.separator())
+        menu.addItem(withTitle: "About ClipboardMac", action: #selector(openAbout), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Quit ClipboardMac", action: #selector(quit), keyEquivalent: "").target = self
         statusMenu = menu
         updateStatus()
