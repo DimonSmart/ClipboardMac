@@ -58,6 +58,16 @@ import HistoryInfrastructure
     #expect(try await database.entries().isEmpty)
 }
 
+@Test func displayShowsPinnedEntriesFirstInOneOrderedList() {
+    let entries = [
+        HistoryEntry(text: "recent", copiedAt: Date(timeIntervalSince1970: 20)),
+        HistoryEntry(text: "older pin", copiedAt: Date(timeIntervalSince1970: 10), pinnedAt: Date(timeIntervalSince1970: 30)),
+        HistoryEntry(text: "newer pin", copiedAt: Date(timeIntervalSince1970: 5), pinnedAt: Date(timeIntervalSince1970: 40))
+    ]
+
+    #expect(HistoryRules.display(entries, query: "").map(\.text) == ["newer pin", "older pin", "recent"])
+}
+
 @Test func storageFillClearAndReopen() async throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }

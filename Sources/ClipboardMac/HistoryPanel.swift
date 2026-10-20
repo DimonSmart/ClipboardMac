@@ -3,15 +3,51 @@ import HistoryCore
 
 @MainActor private final class HistoryWindow: NSPanel {
     var handleKey: ((NSEvent) -> Bool)?
+    var handlePointerChange: (() -> Void)?
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
     override func sendEvent(_ event: NSEvent) {
         if event.type == .keyDown, handleKey?(event) == true { return }
         super.sendEvent(event)
+        if event.type == .mouseMoved || event.type == .scrollWheel {
+            handlePointerChange?()
+        }
+    }
+}
+
+@MainActor private final class OpaquePanelBackgroundView: NSView {
+    override var isOpaque: Bool { true }
+
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.windowBackgroundColor.setFill()
+        bounds.fill()
     }
 }
 
 @MainActor private final class SelectionRow: NSTableRowView {
+    var isHovered = false {
+        didSet { guard oldValue != isHovered else { return }; needsDisplay = true }
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        let outline = NSBezierPath(
+            roundedRect: bounds.insetBy(dx: 4, dy: 2),
+            xRadius: 6,
+            yRadius: 6
+        )
+        outline.lineWidth = 0.9
+        NSColor.separatorColor.withAlphaComponent(0.85).setStroke()
+        outline.stroke()
+    }
+
+    override func drawBackground(in dirtyRect: NSRect) {
+        super.drawBackground(in: dirtyRect)
+        guard isHovered, !isSelected else { return }
+        NSColor.controlAccentColor.withAlphaComponent(0.10).setFill()
+        NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 1), xRadius: 8, yRadius: 8).fill()
+    }
+
     override func drawSelection(in dirtyRect: NSRect) {
         NSColor.controlAccentColor.withAlphaComponent(0.16).setFill()
         NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 1), xRadius: 8, yRadius: 8).fill()
@@ -19,13 +55,12 @@ import HistoryCore
 }
 
 @MainActor final class HistoryPanel: NSObject, NSWindowDelegate, NSSearchFieldDelegate, NSTableViewDataSource, NSTableViewDelegate, NSMenuDelegate {
-    private enum Row { case heading(String), entry(HistoryEntry) }
     private let panel: HistoryWindow
     private let search = NSSearchField()
     private let table = NSTableView()
     private let status = NSTextField(labelWithString: "")
     private let empty = NSTextField(labelWithString: "Copy text to start your history")
-    private var rows: [Row] = []
+    private var rows: [HistoryEntry] = []
     private var entries: [HistoryEntry] = []
     private var searchTask: Task<Void, Never>?
     var onAction: ((HistoryEntry, Bool) -> Void)?
@@ -36,16 +71,18 @@ import HistoryCore
     var isVisible: Bool { panel.isVisible }
 
     override init() {
-        panel = HistoryWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 500), styleMask: [.titled, .fullSizeContentView], backing: .buffered, defer: false)
+        panel = HistoryWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 500), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         super.init()
         panel.title = "Clipboard History"; panel.titleVisibility = .hidden
-        panel.titlebarAppearsTransparent = true
+        panel.titlebarAppearsTransparent = false
+        panel.isOpaque = true; panel.backgroundColor = .windowBackgroundColor
+        panel.acceptsMouseMovedEvents = true
         panel.level = .floating; panel.isFloatingPanel = true; panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary, .transient]
         panel.isReleasedWhenClosed = false; panel.delegate = self
         panel.handleKey = { [weak self] in self?.handle($0) ?? false }
-        let root = NSVisualEffectView()
-        root.material = .popover; root.blendingMode = .behindWindow; root.state = .active
+        panel.handlePointerChange = { [weak self] in self?.updateHoveredRow() }
+        let root = OpaquePanelBackgroundView()
         panel.contentView = root
         let title = NSTextField(labelWithString: "Clipboard History")
         title.font = .systemFont(ofSize: 20, weight: .semibold)
@@ -61,7 +98,7 @@ import HistoryCore
         table.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
         table.frame = NSRect(x: 0, y: 0, width: 600, height: 0)
         table.autoresizingMask = [.width]
-        table.addTableColumn(column); table.headerView = nil; table.rowHeight = 66
+        table.addTableColumn(column); table.headerView = nil; table.rowHeight = 56
         table.style = .plain; table.intercellSpacing = NSSize(width: 0, height: 4)
         table.backgroundColor = .clear
         table.delegate = self; table.dataSource = self
@@ -84,7 +121,7 @@ import HistoryCore
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
             stack.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
-            stack.topAnchor.constraint(equalTo: root.topAnchor, constant: 20),
+            stack.topAnchor.constraint(equalTo: root.safeAreaLayoutGuide.topAnchor, constant: 20),
             stack.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -16),
             empty.centerXAnchor.constraint(equalTo: scroll.centerXAnchor),
             empty.centerYAnchor.constraint(equalTo: scroll.centerYAnchor)
@@ -106,15 +143,24 @@ import HistoryCore
         panel.contentView?.layoutSubtreeIfNeeded()
         table.sizeLastColumnToFit()
         NSApp.activate(); panel.makeKeyAndOrderFront(nil); panel.makeFirstResponder(search)
+        updateHoveredRow()
     }
     func hide() { panel.orderOut(nil) }
+    func windowShouldClose(_ sender: NSWindow) -> Bool { hide(); return false }
     func refresh(entries: [HistoryEntry], status: String) {
         self.entries = entries; self.status.stringValue = status
         filter(preserving: selected?.id)
     }
     private var selected: HistoryEntry? {
-        guard table.selectedRow >= 0, table.selectedRow < rows.count, case let .entry(entry) = rows[table.selectedRow] else { return nil }
-        return entry
+        guard table.selectedRow >= 0, table.selectedRow < rows.count else { return nil }
+        return rows[table.selectedRow]
+    }
+    private func updateHoveredRow() {
+        let pointInWindow = panel.convertPoint(fromScreen: NSEvent.mouseLocation)
+        let hoveredRow = table.row(at: table.convert(pointInWindow, from: nil))
+        for row in 0..<table.numberOfRows {
+            (table.rowView(atRow: row, makeIfNecessary: false) as? SelectionRow)?.isHovered = row == hoveredRow
+        }
     }
     func controlTextDidChange(_ notification: Notification) { filter(preserving: nil) }
     private func filter(preserving id: UUID?) {
@@ -127,66 +173,87 @@ import HistoryCore
         }
     }
     private func updateRows(_ result: [HistoryEntry], preserving id: UUID?) {
-        rows = []
-        let pinned = result.filter { $0.pinnedAt != nil }, recent = result.filter { $0.pinnedAt == nil }
-        if !pinned.isEmpty { rows.append(.heading("Pinned · \(pinned.count)")); rows += pinned.map(Row.entry) }
-        if !recent.isEmpty { rows.append(.heading("Recent · \(recent.count)")); rows += recent.map(Row.entry) }
+        rows = result
         empty.stringValue = search.stringValue.isEmpty ? "Copy text to start your history" : "No matches"
         empty.isHidden = !result.isEmpty
         table.reloadData()
-        let match = rows.firstIndex { if case let .entry(entry) = $0 { return id == nil || entry.id == id }; return false }
-        let first = rows.firstIndex { if case .entry = $0 { return true }; return false }
-        if let row = match ?? first { table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false); table.scrollRowToVisible(row) }
+        if let row = rows.firstIndex(where: { id == nil || $0.id == id }) {
+            table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+            table.scrollRowToVisible(row)
+        }
     }
+    private func normalizedPreview(_ text: String, limit: Int) -> String {
+        var result = ""
+        var characterCount = 0
+        var hasPendingSpace = false
+
+        for character in text {
+            if character.isWhitespace {
+                hasPendingSpace = !result.isEmpty
+                continue
+            }
+
+            if hasPendingSpace {
+                result.append(" ")
+                characterCount += 1
+                hasPendingSpace = false
+            }
+            guard characterCount < limit else { break }
+            result.append(character)
+            characterCount += 1
+        }
+        return result
+    }
+
     func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? { SelectionRow() }
-    func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat { if case .heading = rows[row] { return 24 }; return 66 }
-    func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool { if case .entry = rows[row] { return true }; return false }
+    func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat { 56 }
+    func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool { true }
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        switch rows[row] {
-        case .heading(let text):
-            let label = NSTextField(labelWithString: text)
-            label.font = .systemFont(ofSize: 11, weight: .semibold); label.textColor = .secondaryLabelColor
-            return label
-        case .entry(let entry):
-            let cell = NSTableCellView()
+        let entry = rows[row]
+        let cell = NSTableCellView()
             // Limit rendering cost; the complete UTF-8 value stays in the repository.
-            let preview = NSTextField(wrappingLabelWithString: String(entry.text.prefix(260)))
-            preview.maximumNumberOfLines = 2; preview.lineBreakMode = .byTruncatingTail
+            let preview = NSTextField(wrappingLabelWithString: normalizedPreview(entry.text, limit: 260))
+            preview.maximumNumberOfLines = 3; preview.lineBreakMode = .byWordWrapping
+            preview.usesSingleLineMode = false
             preview.font = .systemFont(ofSize: 13)
-            let formatter = RelativeDateTimeFormatter(); formatter.unitsStyle = .abbreviated
-            let context = NSTextField(labelWithString: [entry.source, formatter.localizedString(for: entry.copiedAt, relativeTo: Date())].compactMap { $0 }.joined(separator: " · "))
-            context.font = .systemFont(ofSize: 10); context.textColor = .secondaryLabelColor
-            context.lineBreakMode = .byTruncatingMiddle
             let pin = NSButton(image: NSImage(systemSymbolName: entry.pinnedAt == nil ? "pin" : "pin.fill", accessibilityDescription: entry.pinnedAt == nil ? "Pin entry" : "Unpin entry")!, target: self, action: #selector(pinClicked(_:)))
             pin.tag = row; pin.bezelStyle = .accessoryBarAction
             pin.widthAnchor.constraint(equalToConstant: 28).isActive = true
-            let text = NSStackView(views: [preview, context]); text.orientation = .vertical; text.alignment = .leading; text.spacing = 4
-            let stack = NSStackView(views: [text, pin]); stack.spacing = 10; stack.distribution = .fill
+            let text = NSStackView(views: [preview]); text.orientation = .vertical; text.alignment = .leading
+            let stack = NSStackView(views: [text, pin]); stack.spacing = 8; stack.distribution = .fill
             text.setContentHuggingPriority(.defaultLow, for: .horizontal)
             pin.setContentHuggingPriority(.required, for: .horizontal)
             stack.translatesAutoresizingMaskIntoConstraints = false
-            cell.addSubview(stack)
+            let viewport = NSView()
+            viewport.translatesAutoresizingMaskIntoConstraints = false
+            viewport.wantsLayer = true
+            viewport.layer?.cornerRadius = 5
+            viewport.layer?.masksToBounds = true
+            cell.addSubview(viewport)
+            viewport.addSubview(stack)
             NSLayoutConstraint.activate([
-                stack.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8),
-                stack.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8),
-                stack.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-                preview.widthAnchor.constraint(equalTo: text.widthAnchor), context.widthAnchor.constraint(equalTo: text.widthAnchor)
+                viewport.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 5),
+                viewport.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -5),
+                viewport.topAnchor.constraint(equalTo: cell.topAnchor, constant: 3),
+                viewport.bottomAnchor.constraint(equalTo: cell.bottomAnchor, constant: -3),
+                stack.leadingAnchor.constraint(equalTo: viewport.leadingAnchor, constant: 3),
+                stack.trailingAnchor.constraint(equalTo: viewport.trailingAnchor, constant: -3),
+                stack.centerYAnchor.constraint(equalTo: viewport.centerYAnchor),
+                preview.widthAnchor.constraint(equalTo: text.widthAnchor)
             ])
-            return cell
-        }
+        return cell
     }
     @objc private func clicked() {
-        guard isVisible, table.clickedRow >= 0, table.clickedRow < rows.count,
-              case let .entry(entry) = rows[table.clickedRow] else { return }
-        onAction?(entry, false)
+        guard isVisible, table.clickedRow >= 0, table.clickedRow < rows.count else { return }
+        onAction?(rows[table.clickedRow], false)
     }
     @objc private func pinClicked(_ button: NSButton) {
-        guard button.tag < rows.count, case let .entry(entry) = rows[button.tag] else { return }
-        onPin?(entry)
+        guard button.tag < rows.count else { return }
+        onPin?(rows[button.tag])
     }
     func menuNeedsUpdate(_ menu: NSMenu) {
-        if table.clickedRow >= 0, table.clickedRow < rows.count, case .entry = rows[table.clickedRow] {
+        if table.clickedRow >= 0, table.clickedRow < rows.count {
             table.selectRowIndexes(IndexSet(integer: table.clickedRow), byExtendingSelection: false)
         }
         menu.removeAllItems()
@@ -201,10 +268,10 @@ import HistoryCore
         case 53: dismiss(); return true
         case 125, 126:
             let direction = event.keyCode == 125 ? 1 : -1
-            var row = table.selectedRow + direction
-            while rows.indices.contains(row) {
-                if case .entry = rows[row] { table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false); table.scrollRowToVisible(row); break }
-                row += direction
+            let row = table.selectedRow + direction
+            if rows.indices.contains(row) {
+                table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+                table.scrollRowToVisible(row)
             }
             return true
         case 36, 76: if let selected { onAction?(selected, command) }; return true

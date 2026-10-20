@@ -109,8 +109,12 @@ import HistoryInfrastructure
         }
         NSApp.mainMenu = main
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        statusItem.isVisible = true
         let icon = NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: "ClipboardMac")!
-        icon.isTemplate = true; statusItem.button?.image = icon
+        icon.size = NSSize(width: 18, height: 18)
+        icon.isTemplate = true
+        statusItem.button?.image = icon
+        statusItem.button?.title = ""
         statusItem.button?.setAccessibilityLabel("ClipboardMac history")
         statusItem.button?.target = self
         statusItem.button?.action = #selector(statusItemClicked(_:))
