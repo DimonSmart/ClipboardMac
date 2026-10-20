@@ -66,6 +66,7 @@ import HistoryCore
     var onAction: ((HistoryEntry, Bool) -> Void)?
     var onPin: ((HistoryEntry) -> Void)?
     var onDelete: ((HistoryEntry) -> Void)?
+    var onClearRecent: (() -> Void)?
     var onSettings: (() -> Void)?
     var onDismiss: (() -> Void)?
     var isVisible: Bool { panel.isVisible }
@@ -93,6 +94,13 @@ import HistoryCore
         search.setAccessibilityLabel("Search clipboard history")
         search.delegate = self; search.sendsSearchStringImmediately = true
         search.sendsWholeSearchString = false
+        let clearRecent = NSButton(title: "Clear", target: self, action: #selector(clearRecentClicked))
+        clearRecent.bezelStyle = .rounded
+        clearRecent.setAccessibilityLabel("Clear unpinned history")
+        let searchRow = NSStackView(views: [search, clearRecent])
+        searchRow.orientation = .horizontal; searchRow.alignment = .centerY; searchRow.spacing = 8
+        search.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        clearRecent.setContentHuggingPriority(.required, for: .horizontal)
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("entry"))
         column.width = 600; column.resizingMask = .autoresizingMask
         table.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
@@ -114,7 +122,7 @@ import HistoryCore
         empty.translatesAutoresizingMaskIntoConstraints = false
         let footer = NSTextField(labelWithString: "↑↓ Navigate   ↩ Paste   ⌘↩ Copy   ⌘P Pin   ⌘⌫ Delete   ⌘Y Preview")
         footer.font = .systemFont(ofSize: 10); footer.textColor = .secondaryLabelColor
-        let stack = NSStackView(views: [header, search, status, scroll, footer])
+        let stack = NSStackView(views: [header, searchRow, status, scroll, footer])
         stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 12
         stack.translatesAutoresizingMaskIntoConstraints = false
         root.addSubview(stack); root.addSubview(empty)
@@ -126,7 +134,8 @@ import HistoryCore
             empty.centerXAnchor.constraint(equalTo: scroll.centerXAnchor),
             empty.centerYAnchor.constraint(equalTo: scroll.centerYAnchor)
         ])
-        for view in [header, search, status, scroll, footer] { view.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true }
+        for view in [header, searchRow, status, scroll, footer] { view.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true }
+        search.widthAnchor.constraint(greaterThanOrEqualToConstant: 120).isActive = true
         search.heightAnchor.constraint(equalToConstant: 30).isActive = true
     }
     func open(entries: [HistoryEntry], status: String) {
@@ -293,6 +302,7 @@ import HistoryCore
     @objc private func copySelection() { if let selected { onAction?(selected, true) } }
     @objc private func pinSelection() { if let selected { onPin?(selected) } }
     @objc private func deleteSelection() { if let selected { onDelete?(selected) } }
+    @objc private func clearRecentClicked() { onClearRecent?() }
     @objc private func openSettings() { dismiss(); onSettings?() }
     @objc private func previewSelection() {
         guard let selected else { return }

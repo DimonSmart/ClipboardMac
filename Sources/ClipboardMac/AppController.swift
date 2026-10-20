@@ -50,6 +50,7 @@ import HistoryInfrastructure
             }
         }
         panel.onDelete = { [weak self] entry in self?.mutate { [weak self] in try await self?.history.delete(entry.id) } }
+        panel.onClearRecent = { [weak self] in self?.clearRecent() }
         panel.onSettings = { [weak self] in self?.openSettings() }
         settings = SettingsController(preferences: preferences, clipboard: clipboard, storagePath: storagePath)
         about = AboutWindowController()
