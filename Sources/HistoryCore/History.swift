@@ -19,7 +19,7 @@ public enum HistoryRules {
     public static func eligible(_ text: String) -> Bool { !text.isEmpty && text.utf8.count <= maximumBytes }
     public static func limit(_ value: Int) -> Int { min(2000, max(50, value)) }
     public static func display(_ entries: [HistoryEntry], query: String) -> [HistoryEntry] {
-        entries.filter { query.isEmpty || $0.text.range(of: query, options: [.caseInsensitive], locale: Locale(identifier: "en_US_POSIX")) != nil }
+        filterPreservingOrder(entries, query: query)
             .sorted {
                 switch ($0.pinnedAt, $1.pinnedAt) {
                 case let (a?, b?) where a != b: return a > b
@@ -28,6 +28,11 @@ public enum HistoryRules {
                 default: return $0.copiedAt == $1.copiedAt ? $0.id.uuidString < $1.id.uuidString : $0.copiedAt > $1.copiedAt
                 }
             }
+    }
+    public static func filterPreservingOrder(_ entries: [HistoryEntry], query: String) -> [HistoryEntry] {
+        entries.filter {
+            query.isEmpty || $0.text.range(of: query, options: [.caseInsensitive], locale: Locale(identifier: "en_US_POSIX")) != nil
+        }
     }
 }
 

@@ -130,9 +130,10 @@ import HistoryCore
         search.heightAnchor.constraint(equalToConstant: 30).isActive = true
     }
     func open(entries: [HistoryEntry], status: String) {
-        self.entries = entries; self.status.stringValue = status
+        self.entries = HistoryRules.display(entries, query: "")
+        self.status.stringValue = status
         search.stringValue = ""
-        updateRows(HistoryRules.display(entries, query: ""), preserving: nil)
+        updateRows(self.entries, preserving: nil)
         let point = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { $0.frame.contains(point) } ?? NSScreen.main
         if let screen {
@@ -148,7 +149,12 @@ import HistoryCore
     func hide() { panel.orderOut(nil) }
     func windowShouldClose(_ sender: NSWindow) -> Bool { hide(); return false }
     func refresh(entries: [HistoryEntry], status: String) {
-        self.entries = entries; self.status.stringValue = status
+        let incoming = Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0) })
+        let retained = self.entries.compactMap { incoming[$0.id] }
+        let retainedIDs = Set(retained.map(\.id))
+        let appended = entries.filter { !retainedIDs.contains($0.id) }
+        self.entries = retained + appended
+        self.status.stringValue = status
         filter(preserving: selected?.id)
     }
     private var selected: HistoryEntry? {
@@ -167,7 +173,9 @@ import HistoryCore
         searchTask?.cancel()
         let current = entries, query = search.stringValue
         searchTask = Task { @MainActor [weak self] in
-            let result = await Task.detached(priority: .userInitiated) { HistoryRules.display(current, query: query) }.value
+            let result = await Task.detached(priority: .userInitiated) {
+                HistoryRules.filterPreservingOrder(current, query: query)
+            }.value
             guard !Task.isCancelled else { return }
             self?.updateRows(result, preserving: id)
         }
