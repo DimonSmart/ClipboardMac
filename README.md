@@ -1,3 +1,5 @@
+![ClipboardMac — pinned prompts at your fingertips](assets/social-preview.jpg)
+
 # ClipboardMac
 
 **Stop typing the same prompt twice.**
