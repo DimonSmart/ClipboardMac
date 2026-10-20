@@ -37,7 +37,7 @@ import HistoryCore
             yRadius: 6
         )
         outline.lineWidth = 0.9
-        NSColor.separatorColor.withAlphaComponent(0.85).setStroke()
+        NSColor.separatorColor.withAlphaComponent(0.55).setStroke()
         outline.stroke()
     }
 
@@ -74,7 +74,7 @@ import HistoryCore
     override init() {
         panel = HistoryWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 500), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         super.init()
-        panel.title = "Clipboard History"; panel.titleVisibility = .hidden
+        panel.title = "Clipboard History"; panel.titleVisibility = .visible
         panel.titlebarAppearsTransparent = false
         panel.isOpaque = true; panel.backgroundColor = .windowBackgroundColor
         panel.acceptsMouseMovedEvents = true
@@ -85,11 +85,10 @@ import HistoryCore
         panel.handlePointerChange = { [weak self] in self?.updateHoveredRow() }
         let root = OpaquePanelBackgroundView()
         panel.contentView = root
-        let title = NSTextField(labelWithString: "Clipboard History")
-        title.font = .systemFont(ofSize: 20, weight: .semibold)
         let settings = NSButton(image: NSImage(systemSymbolName: "gearshape", accessibilityDescription: "Settings")!, target: self, action: #selector(openSettings))
         settings.bezelStyle = .accessoryBarAction
-        let header = NSStackView(views: [title, NSView(), settings]); header.distribution = .fill
+        settings.setAccessibilityLabel("Settings")
+        settings.toolTip = "Settings"
         search.placeholderString = "Search your clipboard…"
         search.setAccessibilityLabel("Search clipboard history")
         search.delegate = self; search.sendsSearchStringImmediately = true
@@ -122,7 +121,11 @@ import HistoryCore
         empty.translatesAutoresizingMaskIntoConstraints = false
         let footer = NSTextField(labelWithString: "↑↓ Navigate   ↩ Paste   ⌘↩ Copy   ⌘P Pin   ⌘⌫ Delete   ⌘Y Preview")
         footer.font = .systemFont(ofSize: 10); footer.textColor = .secondaryLabelColor
-        let stack = NSStackView(views: [header, searchRow, status, scroll, footer])
+        let footerRow = NSStackView(views: [footer, NSView(), settings])
+        footerRow.orientation = .horizontal; footerRow.alignment = .centerY; footerRow.spacing = 8
+        footer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        settings.setContentHuggingPriority(.required, for: .horizontal)
+        let stack = NSStackView(views: [searchRow, status, scroll, footerRow])
         stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 12
         stack.translatesAutoresizingMaskIntoConstraints = false
         root.addSubview(stack); root.addSubview(empty)
@@ -134,7 +137,7 @@ import HistoryCore
             empty.centerXAnchor.constraint(equalTo: scroll.centerXAnchor),
             empty.centerYAnchor.constraint(equalTo: scroll.centerYAnchor)
         ])
-        for view in [header, searchRow, status, scroll, footer] { view.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true }
+        for view in [searchRow, status, scroll, footerRow] { view.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true }
         search.widthAnchor.constraint(greaterThanOrEqualToConstant: 120).isActive = true
         search.heightAnchor.constraint(equalToConstant: 30).isActive = true
     }
@@ -152,7 +155,8 @@ import HistoryCore
         }
         panel.contentView?.layoutSubtreeIfNeeded()
         table.sizeLastColumnToFit()
-        NSApp.activate(); panel.makeKeyAndOrderFront(nil); panel.makeFirstResponder(search)
+        NSApp.activate(); panel.makeKeyAndOrderFront(nil)
+        panel.makeFirstResponder(rows.isEmpty ? search : table)
         updateHoveredRow()
     }
     func hide() { panel.orderOut(nil) }
