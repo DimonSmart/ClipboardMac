@@ -1,0 +1,50 @@
+name: Import ClipboardMac social preview
+
+on:
+  push:
+    paths:
+      - .github/workflows/import-social-preview.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  import-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download social preview and embed it in README
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          response="$(gh api graphql -f query='query { repository(owner: "DimonSmart", name: "ClipboardMac") { usesCustomOpenGraphImage openGraphImageUrl } }')"
+          echo "$response" | jq -e '.data.repository.usesCustomOpenGraphImage == true' > /dev/null
+          url="$(echo "$response" | jq -r '.data.repository.openGraphImageUrl')"
+          [[ "$url" == https://repository-images.githubusercontent.com/* ]] || { echo "Unexpected preview URL: $url"; exit 1; }
+          curl -fsSL --retry 3 "$url" -o /tmp/social-preview
+          mime="$(file -b --mime-type /tmp/social-preview)"
+          case "$mime" in
+            image/jpeg) filename=social-preview.jpg ;;
+            image/png) filename=social-preview.png ;;
+            *) echo "Unexpected MIME type: $mime"; exit 1 ;;
+          esac
+          test "$(wc -c </tmp/social-preview)" -gt 10000
+          mkdir -p assets
+          mv /tmp/social-preview "assets/$filename"
+          python3 - "$filename" <<'PY'
+          from pathlib import Path
+          import sys
+          p = Path('README.md')
+          content = p.read_text(encoding='utf-8')
+          line = f'![ClipboardMac — pinned prompts at your fingertips](assets/{sys.argv[1]})'
+          if not content.startswith('![ClipboardMac'):
+              p.write_text(line + '\n\n' + content, encoding='utf-8')
+          PY
+          rm .github/workflows/import-social-preview.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add README.md assets/ .github/workflows/import-social-preview.yml
+          git commit -m 'docs: add ClipboardMac social preview to README'
+          git push
